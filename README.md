@@ -1,19 +1,4 @@
-## Advanced Lane Finding
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
-
-
-In this project, your goal is to write a software pipeline to identify the lane boundaries in a video, but the main output or product we want you to create is a detailed writeup of the project.  Check out the [writeup template](https://github.com/udacity/CarND-Advanced-Lane-Lines/blob/master/writeup_template.md) for this project and use it as a starting point for creating your own writeup.  
-
-Creating a great writeup:
----
-A great writeup should include the rubric points as well as your description of how you addressed each point.  You should include a detailed description of the code used in each step (with line-number references and code snippets where necessary), and links to other supporting documents or external references.  You should include images in your writeup to demonstrate how your code works with examples.  
-
-All that said, please be concise!  We're not looking for you to write a book here, just a brief description of how you passed each rubric point, and references to the relevant code :). 
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup.
-
-The Project
----
+**Advanced Lane Finding Project**
 
 The goals / steps of this project are the following:
 
@@ -26,10 +11,97 @@ The goals / steps of this project are the following:
 * Warp the detected lane boundaries back onto the original image.
 * Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
 
-The images for camera calibration are stored in the folder called `camera_cal`.  The images in `test_images` are for testing your pipeline on single frames.  If you want to extract more test images from the videos, you can simply use an image writing method like `cv2.imwrite()`, i.e., you can read the video in frame by frame as usual, and for frames you want to save for later you can write to an image file.  
+[//]: # (Image References)
 
-To help the reviewer examine your work, please save examples of the output from each stage of your pipeline in the folder called `ouput_images`, and include a description in your writeup for the project of what each image shows.    The video called `project_video.mp4` is the video your pipeline should work well on.  
+[image1]: ./output_images/Q1_output.png "Undistorted"
+[image2]: ./output_images/Q2_output.png "Road Transformed"
+[image3]: ./output_images/Q3_output.png "Binary Example"
+[image4]: ./output_images/Q4_output.png "Warp Example"
+[image5]: ./output_images/Histogram.png "Smoothened histogram"
+[image6]: ./output_images/Q6_output.png "Output"
+[video1]: ./processed_project_video.mp4 "Video"
 
-The `challenge_video.mp4` video is an extra (and optional) challenge for you if you want to test your pipeline under somewhat trickier conditions.  The `harder_challenge.mp4` video is another optional challenge and is brutal!
+### Camera Calibration
 
-If you're feeling ambitious (again, totally optional though), don't stop there!  We encourage you to go out and take video of your own, calibrate your camera and show us how you would implement this project from scratch!
+#### 1. Computing camera matrix and distortion coefficients
+
+The code for this step is contained in the first and second code cell of the IPython notebook located in "./pipeline.ipynb".
+
+I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
+
+I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result: 
+
+![alt text][image1]
+
+### Pipeline (single images)
+
+#### 1. Example of a distortion-corrected image.
+
+To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
+![alt text][image2]
+
+#### 2. Output of Color transforms, gradients or other methods to create a thresholded binary image
+
+I used a combination of color and gradient thresholds to generate a binary image in code cell 3 of the IPython notebook located in "./pipeline.ipynb".  Here's an example of my output for this step.
+
+![alt text][image3]
+
+#### 3. Performing perspective transform
+
+The code for my perspective transform includes a function called `warp()`, which appears in the 4th code cell of the IPython notebook.  The `warp()` function takes as inputs an image (`img`) and an additional parameter to indicate normal and inverse perspective transform.  I chose the hardcode the source and destination points in the following manner:
+
+```python
+src = np.float32([corners[0],corners[1],corners[2],corners[3]])
+dst = np.float32([corners[0]+offset,new_top_left+offset,new_top_right-offset ,corners[3]-offset])
+```
+
+This resulted in the following source and destination points:
+
+| Source        | Destination   | 
+|:-------------:|:-------------:| 
+| 188, 720      | 338, 720        | 
+| 576, 460      | 338, 0      |
+| 706, 460     | 976, 0      |
+| 1126, 720      | 976, 720        |
+
+I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
+
+![alt text][image4]
+
+#### 4. Identifying lane-line pixels and polynomial fit
+
+The code for lane lines identification includes a function called `get_LineFit()`, which appears in the 7th code cell of the IPython notebook. This function takes the warped binary image as the input, identifies the lane lines and returns the left and right line polynomial for further processing. The first step in the pipeline is to identify the lane lines; this is done by using histogram and sliding window approach to find the lane lines in the binary image, since the warped binary image contains only the lane line information. The histogram is smoothened using 'scipy.ndimage.filters.gaussian_filter()' to avoid identifying the jitter. The output of the smoothened histogram is shown below.
+
+![alt text][image5]
+
+The two prominent peaks in the histogram indicate the lane lines position in the image. This process is used to identify the lane lines in the given warped binary image using the sliding window approach where the histogram process is repeated different divided sections of the image to identify the lane line pixels and use this information to get the best fit polynomial for the identified lane lines. 
+
+#### 5. Radius of curvature of the lane and the position of the vehicle with respect to center calculation
+
+The code for lane lines identification includes a function called `detect_lanelines()`, which appears in the 8th code cell of the IPython notebook. This function takes the warped binary image as the input, fills the region between the lane lines, calculates the radius of curvature and offset value with respect to center and finally returns it for further processing.
+
+#### 6. Example image of the result plotted back down onto the road such that the lane area is identified clearly
+
+The code for the pipeline output on an image is in 9th and 10th code cell of the IPython notebook. The output of the pipeline is shown below:
+
+![alt text][image6]
+
+---
+
+### Pipeline (video)
+
+#### 1. Link to final video output
+
+Here's the [output video][video1]
+
+---
+
+### Discussion
+
+#### 1. Problems / issues you faced in implementation of this project
+
+The pipeline can be made more robust in the following sections:
+
+* Improving the binary_image() function to further improve the lightness gradient.
+* Improving the warp() function to automatically detect the 'src' points instead of hradcoding the the values.
+* Include tracking mechanism in the pipeline to improve the speed and perform sanity checks.
